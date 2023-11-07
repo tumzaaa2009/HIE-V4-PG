@@ -476,7 +476,7 @@ class HieService {
           .catch((error) => {
             reject(error);
           });
-
+ 
       });
       return callGetVisit;
     } else {
