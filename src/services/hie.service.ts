@@ -3,6 +3,8 @@ const batchSize: number = 2000; // จำนวนรายการที่จ
 import axios from "axios";
 import moment from "moment";
 import { Token_DrugAllgy, END_POINT, hospCodeEnv, hospNameEnv } from "@config";
+const { Client } = require('pg');
+const client = new Client()
 //ยาdrugAllgy
 function formatResult(queryResult) {
   const formattedResult = [];
@@ -71,6 +73,27 @@ function splitDataIntoChunks(data, chunkSize) {
 
   return chunks;
 }
+function splitDataVisit(data, chunkSize) {
+  const chunks = [];
+
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.slice(i, i + chunkSize);
+    // แตก Object drugAllergy และกำหนดรูปแบบ
+    const modifiedChunk = chunk.map(item => {
+
+      return {
+        Cid: item.cid,
+        hospCode: item.hospcode,
+        lastVisit: item.vstdate,
+        provinceCode: item.provincecode,
+      };
+    });
+
+    chunks.push(modifiedChunk);
+  }
+
+  return chunks;
+}
 
 async function DrugAxios(dataMap) {
   try {
@@ -84,7 +107,7 @@ async function DrugAxios(dataMap) {
         },
       }
     );
-      console.log(data)
+    console.log(data)
     return data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -97,6 +120,109 @@ async function DrugAxios(dataMap) {
   }
 }
 class HieService {
+  public async ServiceVisitCashe(
+    token: string,
+  ): Promise<void> {
+    try {
+      let date = "";
+      const checkVisitListDate = await new Promise((resolve, reject) => {
+        axios
+          .get(`${END_POINT}/checkvisitcashe`, {
+            headers: {
+              "x-api-key": `${Token_DrugAllgy}`,
+              "Content-Type": "application/json",
+            },
+          })
+          .then((result) => {
+            date = result.data;
+            if (moment(date.date).format("YYYY-MM-DD") != "Invalid date") {
+              resolve(moment(date.date).format("YYYY-MM-DD"));
+            } else {
+              resolve("");
+            }
+          });
+      });
+
+      let maxDate = "";
+
+      const formattedResult = await new Promise((resolve, reject) => {
+        async function fetchRecords(checkVisitListDate) {
+          const query = sql`
+            SELECT 
+              a.cid AS cid,
+              10690 AS hospcode,
+              16 AS provinceCode,
+              MAX(a.vstdate) AS vstdate 
+            FROM vn_stat a 
+            WHERE CHAR_LENGTH(a.cid) = 13 
+              AND a.cid NOT LIKE '0%' 
+              AND a.vstdate <= NOW()
+              AND a.vstdate BETWEEN ${checkVisitListDate} AND NOW()
+            GROUP BY a.cid;
+          `;
+          const records = await query;
+          maxDate = moment(records[0].vstdate).format("YYYY-MM-DD")
+          console.log(maxDate)
+          resolve(records); // รีเทิร์นค่า queryResult ดังกล่าว
+        }
+        fetchRecords(checkVisitListDate)
+      });
+
+      const dataChunksVisitList = await splitDataVisit(formattedResult, batchSize);
+      const responsesArray = [];
+      for (const chunk of dataChunksVisitList) {
+        for (const item of chunk) {
+
+          const reqbodyVisit = {
+            Cid: item.Cid,
+            hospCode: item.hospCode,
+            lastVisit: moment(item.lastVisit).format('YYYY-MM-DD'),
+            provinceCode: item.provinceCode,
+          };
+
+          try {
+            const response = await axios.post(
+              `${END_POINT}/eventvisitcashe/`,
+              reqbodyVisit,
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': `${Token_DrugAllgy}`,
+                },
+              }
+            );
+            console.log(response.data.msg);
+            responsesArray.push(response.data.msg);
+          } catch (error) {
+            console.log(error);
+          }
+        }
+      }
+      if (responsesArray) {
+        const today = new Date();
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate());
+        nextWeek.setHours(0, 0, 0, 0);
+        nextWeek.setHours(23, 59, 0, 0);
+        const axiosConfig = {
+          baseURL: `${END_POINT}/eventvisitcashe/`,
+          headers: {
+            'X-API-KEY': `${Token_DrugAllgy}`,
+            'Content-Type': 'application/json',
+          },
+        };
+        // จัดรูปแบบวันที่ในรูปแบบ "yyyy-MM-dd"
+        const formattedDate = today.toISOString().slice(0, 10);
+        const formattedNextWeek = nextWeek.toISOString().slice(0, 10);
+        await axios.post('/', { date: maxDate, dateUpdate: formattedNextWeek + ' 23.59.00' }, axiosConfig);
+        return responsesArray;
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+
   public async ServiceDrugAllgyCashe(
     token: string,
     visitList: string
@@ -174,9 +300,7 @@ class HieService {
                 drugsymptom: allergy.drugsystom,
               })),
             };
-
             // Use await to get the response from DrugAxios
-
             const response = await DrugAxios(reqbody);
             // Push the response to the chunkResponses array
             chunkResponses.push(response);
@@ -184,7 +308,6 @@ class HieService {
           }
         })
       );
-
       if (chunkResponses) {
         const today = new Date();
         const nextWeek = new Date(today);
@@ -472,7 +595,7 @@ class HieService {
           .catch((error) => {
             reject(error);
           });
- 
+
       });
       return callGetVisit;
     } else {

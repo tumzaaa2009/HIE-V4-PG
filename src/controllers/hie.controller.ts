@@ -27,6 +27,14 @@ class HieControlers {
       res.status(400);
     }
   };
+  public VisitCahse = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+ 
+    const restDrugAllgy =  await this.hieService.ServiceVisitCashe(Token_DrugAllgy); 
+      
+     res.send(restDrugAllgy)
+   };
+
+
 // ส่ง ข้อมูล visitCahse ตาม ***last Update*** เช่นเขตเก็บ วันที่ แล้วเอา วันที่ ที่เขตเก็บมา bettween 
   public PostDrugAllgy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
  
@@ -35,6 +43,7 @@ class HieControlers {
     res.send(restDrugAllgy)
   };
 
+  
   public GetVisitList = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const restCheckVisitTicket =  await this.hieService.ServiceCheckVisitTicket(req.headers['x-api-key']); 
  
