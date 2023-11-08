@@ -16,5 +16,6 @@ export const {
   ORIGIN,
   Token_DrugAllgy,
   END_POINT,
+  URL_Hos,
   hospCodeEnv,hospNameEnv
 } = process.env;

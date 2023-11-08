@@ -84,7 +84,7 @@ async function DrugAxios(dataMap) {
         },
       }
     );
-
+      console.log(data)
     return data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -141,14 +141,12 @@ class HieService {
                 AND pa.cid NOT LIKE '0%'
                 AND report_date IS NOT NULL
                 AND DATE(a.report_date) BETWEEN ${checkVisitCaheResult} AND NOW()
-          ORDER BY a.report_date DESC;
-            `
+          ORDER BY a.report_date DESC; `
           .then((queryResult) => {
             const originalDate = moment(
               queryResult[0].update_date,
               "YYYY-MM-DD"
             );
-
             const previousDate = originalDate
               .subtract("days")
               .format("YYYY-MM-DD");
@@ -169,7 +167,7 @@ class HieService {
           for (const item of chunk) {
             const reqbody = {
               Cid: item.cid,
-              hospCode: `${hospNameEnv}`,
+              hospCode: `${hospCodeEnv}`,
               drugAllergy: item.drugallergy.map((allergy) => ({
                 drugcode: allergy.drugcode,
                 drugallergy: allergy.drugallergy,
@@ -269,9 +267,7 @@ class HieService {
             LEFT OUTER JOIN icd9cm1 cm ON cm.code = pr.icd9cm
             WHERE p.cid =  ${checkToken.msg.cidPatient}
             GROUP BY p.hcode, hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name, age, p.birthday, v.vstdate
-            ORDER BY v.vstdate DESC;
-
-        `
+            ORDER BY v.vstdate DESC; `
           .then((queryResult) => {
             let visitListArray = { visit: [] };
             for (let index = 0; index < queryResult.length; index++) {
@@ -290,7 +286,7 @@ class HieService {
               status: "200",
               message: "OK",
               person: {
-                hospcode: `${hospNameEnv}`,
+                hospcode: `${hospCodeEnv}`,
                 hospname: `${hospNameEnv}`,
                 cid: `${queryResult[0].cid}`,
                 hn: `${queryResult[0].hn}`,
