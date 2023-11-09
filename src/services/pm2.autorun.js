@@ -15,7 +15,7 @@ const checkAndRun = async () => {
 
     });
     const dateEvent = response.data.dateEvent;
-    const now = moment(new Date()).format("YYYY-MM-DD HH:mm:ss");
+    const now = moment().format("YYYY-MM-DD HH:mm:ss")  
     if (now >= moment(dateEvent, 'YYYY-MM-DD HH:mm:ss')) {
       // หากเราอยู่หรือเกินวันและเวลาที่กำหนด
       axios.post(`${URL_Hos}/hie/drugallgycashe`, null, {
