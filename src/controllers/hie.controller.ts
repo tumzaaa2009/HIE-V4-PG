@@ -28,7 +28,7 @@ class HieControlers {
     }
   };
   public VisitCahse = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
- 
+   
     const restDrugAllgy =  await this.hieService.ServiceVisitCashe(Token_DrugAllgy); 
       
      res.send(restDrugAllgy)

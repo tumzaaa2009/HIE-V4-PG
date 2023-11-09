@@ -167,19 +167,18 @@ class HieService {
         }
         fetchRecords(checkVisitListDate)
       });
-
+      console.log("gggg")
       const dataChunksVisitList = await splitDataVisit(formattedResult, batchSize);
       const responsesArray = [];
       for (const chunk of dataChunksVisitList) {
         for (const item of chunk) {
-
           const reqbodyVisit = {
             Cid: item.Cid,
             hospCode: item.hospCode,
             lastVisit: moment(item.lastVisit).format('YYYY-MM-DD'),
             provinceCode: item.provinceCode,
           };
-
+       
           try {
             const response = await axios.post(
               `${END_POINT}/eventvisitcashe/`,
