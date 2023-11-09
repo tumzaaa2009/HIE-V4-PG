@@ -8,21 +8,29 @@ import hpp from 'hpp';
 import morgan from 'morgan';
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
-import { NODE_ENV, PORT, LOG_FORMAT, ORIGIN, CREDENTIALS } from '@config';
+import { NODE_ENV, PORT, LOG_FORMAT, ORIGIN, CREDENTIALS,SSL_CRT_FILE,SSL_KEY_FILE,SSL_CHAIN_FILE } from '@config';
 import { Routes } from '@interfaces/routes.interface';
 import { ErrorMiddleware } from '@middlewares/error.middleware';
 import { logger, stream } from '@utils/logger';
- 
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 export class App {
   public app: express.Application;
   public env: string;
   public port: string | number;
-
+  public httpsOption;
+  public server;
   constructor(routes: Routes[]) {
     this.app = express();
     this.env = NODE_ENV || 'development';
     this.port = PORT ;
-
+    this.httpsOption = {
+       cert: fs.readFileSync(path.join(__dirname, `${SSL_CRT_FILE}`)),
+       key: fs.readFileSync(path.join(__dirname, `${SSL_KEY_FILE}`)),
+       chain : fs.readFileSync(path.join(__dirname, `${SSL_CHAIN_FILE}`)),
+    };
+    this.server = require('https').createServer(this.httpsOption, this.app);
     this.initializeMiddlewares();
     this.initializeRoutes(routes);
     this.initializeSwagger();
@@ -30,7 +38,7 @@ export class App {
   }
 
   public listen() {
-    this.app.listen(this.port, () => {
+    this.server.listen(this.port, () => {
       logger.info(`=================================`);
       logger.info(`======= ENV: ${this.env} =======`);
       logger.info(`🚀 วิ่ง ${this.port}`);
