@@ -38,7 +38,7 @@ export class App {
   }
 
   public listen() {
-    this.app.listen(this.port, () => {
+    this.server.listen(this.port, () => {
       logger.info(`=================================`);
       logger.info(`======= ENV: ${this.env} =======`);
       logger.info(`🚀 วิ่ง ${this.port}`);
