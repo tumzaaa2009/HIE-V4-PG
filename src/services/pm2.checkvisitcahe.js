@@ -15,9 +15,8 @@ const checkAndRun = async () => {
     });
     
     const dateEvent = response.data.dateEvent;
-    const now = moment().format("YYYY-MM-DD HH:mm:ss")
     
-    if (now >= moment(dateEvent).format("YYYY-MM-DD HH:mm:ss")) {
+    if (moment().format("YYYY-MM-DD HH:mm:ss") >= moment(dateEvent).format("YYYY-MM-DD HH:mm:ss")) {
       console.log("tsss")
       try {
         await axios.post(`${URL_Hos}/hie/visitcashe` );
