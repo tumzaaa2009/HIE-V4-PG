@@ -3,7 +3,7 @@ const moment = require('moment');
 const https = require('https')
 const { config } = require('dotenv');
 config({ path: '.env.production.local' });
-
+const cron = require('node-cron');
 const { END_POINT, URL_Hos, Token_DrugAllgy } = process.env;
 
 const checkAndRun = async () => {
@@ -39,4 +39,7 @@ const checkAndRun = async () => {
 };
 
 // เรียกฟังก์ชัน checkAndRun เพื่อเริ่มต้นตรวจสอบและการรัน
-checkAndRun();
+cron.schedule('08 11 * * *', () => {
+  console.log('Running checkAndRun at 11:30 AM every day');
+  checkAndRun();
+});
