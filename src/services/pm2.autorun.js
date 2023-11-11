@@ -5,6 +5,19 @@ const { config } = require('dotenv');
 config({ path: '.env.production.local' });
 const cron = require('node-cron');
 const { END_POINT, URL_Hos, Token_DrugAllgy } = process.env;
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateRandomTime() {
+  const randomHour = getRandomInt(21, 23);
+  const randomMinute = getRandomInt(0, 59);
+
+  // แปลงให้อยู่ในรูปแบบ HH:mm
+  const formattedTime = `${String(randomMinute).padStart(2, '0')} ${String(randomHour).padStart(2, '0')}  * * *`;
+
+  return formattedTime;
+}
 
 const checkAndRun = async () => {
   try {
@@ -15,7 +28,8 @@ const checkAndRun = async () => {
 
     });
     const dateEvent = response.data.dateEvent;
-    if (moment().format("YYYY-MM-DD HH:mm:ss") >= dateEvent) {
+ 
+    if ( moment().format("YYYY-MM-DD HH:mm:ss")  >=  dateEvent ) {
       // หากเราอยู่หรือเกินวันและเวลาที่กำหนด
       axios.post(`${URL_Hos}/hie/drugallgycashe`, null, {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -37,9 +51,13 @@ const checkAndRun = async () => {
 
 
 };
-
+ 
+const genTime = generateRandomTime(); 
+ 
+console.log(genTime);
+ 
 // เรียกฟังก์ชัน checkAndRun เพื่อเริ่มต้นตรวจสอบและการรัน
-cron.schedule('08 11 * * *', () => {
-  console.log('Running checkAndRun at 11:30 AM every day');
+cron.schedule(`${genTime}`, () => {
+  console.log(`ว่งเวลา${generateRandomTime()}`);
   checkAndRun();
 });
