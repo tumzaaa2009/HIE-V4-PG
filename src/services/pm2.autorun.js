@@ -10,8 +10,8 @@ function getRandomInt(min, max) {
 }
 
 function generateRandomTime() {
-  const randomHour = getRandomInt(21, 23);
-  const randomMinute = getRandomInt(0, 59);
+  const randomHour = getRandomInt(10, 10);
+  const randomMinute = getRandomInt(12, 12);
 
   // แปลงให้อยู่ในรูปแบบ HH:mm
   const formattedTime = `${String(randomMinute).padStart(2, '0')} ${String(randomHour).padStart(2, '0')}  * * *`;
@@ -20,37 +20,23 @@ function generateRandomTime() {
 }
 
 const checkAndRun = async () => {
-  try {
-    const response = await axios.get(`${END_POINT}/checkvisitcahedrugaligy`, {
-      headers: {
-        'x-api-key': `${Token_DrugAllgy}`
-      }
-
-    });
-    const dateEvent = response.data.dateEvent;
  
-    if ( moment().format("YYYY-MM-DD HH:mm:ss")  >=  dateEvent ) {
-      // หากเราอยู่หรือเกินวันและเวลาที่กำหนด
-      axios.post(`${URL_Hos}/hie/drugallgycashe`, null, {
+    try {
+      await axios.post(`${URL_Hos}/hie/drugallgycashe`, null, {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       })
-        .then((response) => {
-          console.log('HTTP request to http://localhost:3000/hie/drugallgycashe has been made.');
-          // ใส่โค้ดเพิ่มเติมที่คุณต้องการทำหลังจากการเรียก HTTP นี้
-        })
-        .catch((error) => {
-          console.error('HTTP request to http://localhost:3000/hie/drugallgycashe failed:', error);
-        });
-    } else {
-      console.log('Not yet time to make the HTTP request.');
+      console.log('HTTP request to ' + URL_Hos + '/hie/visitcashe has been made.');
+      // เพิ่มโค้ดเพิ่มเติมที่คุณต้องการจากการเรียก HTTP นี้
+    } catch (error) {
+      console.error('HTTP request to ' + URL_Hos + '/hie/visitcashe failed:', error);
     }
 
-  } catch (error) {
-
-  }
 
 
-};
+
+    }  
+
+
  
 const genTime = generateRandomTime(); 
  
@@ -58,6 +44,6 @@ console.log(genTime);
  
 // เรียกฟังก์ชัน checkAndRun เพื่อเริ่มต้นตรวจสอบและการรัน
 cron.schedule(`${genTime}`, () => {
-  console.log(`ว่งเวลา${generateRandomTime()}`);
+  console.log(`ว่งเวลา${genTime}`);
   checkAndRun();
 });

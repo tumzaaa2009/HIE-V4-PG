@@ -5,6 +5,7 @@ import moment from "moment";
 import { Token_DrugAllgy, END_POINT, hospCodeEnv, hospNameEnv } from "@config";
 const { Client } = require('pg');
 const client = new Client()
+const cron = require('node-cron');
 //ยาdrugAllgy
 function formatResult(queryResult) {
   const formattedResult = [];
@@ -213,7 +214,7 @@ class HieService {
         // จัดรูปแบบวันที่ในรูปแบบ "yyyy-MM-dd"
         const formattedDate = today.toISOString().slice(0, 10);
         const formattedNextWeek = nextWeek.toISOString().slice(0, 10);
-        await axios.post('/', { date: maxDate, dateUpdate: formattedNextWeek + ' 23.59.00' }, axiosConfig);
+        await axios.post('/', { date: maxDate, dateUpdate: formattedNextWeek + ' 19.59.00' }, axiosConfig);
         return responsesArray;
       }
     } catch (error) {
@@ -222,10 +223,11 @@ class HieService {
   }
 
 
-  public async ServiceDrugAllgyCashe(
+ public async ServiceDrugAllgyCashe(
     token: string,
     visitList: string
   ): Promise<void> {
+
     try {
       let date = "";
       const checkVisitCaheResult = await new Promise((resolve, reject) => {
@@ -325,18 +327,22 @@ class HieService {
         // จัดรูปแบบวันที่ในรูปแบบ "yyyy-MM-dd"
         const formattedDate = today.toISOString().slice(0, 10);
         const formattedNextWeek = nextWeek.toISOString().slice(0, 10);
+        console.log(formattedNextWeek)
         await axios.post(
           "/",
-          { date: maxDate, dateUpdate: formattedNextWeek + " 23.59.00" },
+          { date: maxDate, dateUpdate: formattedNextWeek + " 19.59.00" },
           axiosConfig
         );
 
         return chunkResponses;
       }
+      
     } catch (error) {
       console.error(error);
     }
   }
+
+
   public async ServiceCheckVisitTicket(
     ticketCheckPassCode: string
   ): Promise<void> {
