@@ -201,7 +201,7 @@ class HieService {
       if (responsesArray) {
         const today = new Date();
         const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate());
+        nextWeek.setDate(today.getDate()+1);
         nextWeek.setHours(0, 0, 0, 0);
         nextWeek.setHours(23, 59, 0, 0);
         const axiosConfig = {
@@ -312,7 +312,7 @@ class HieService {
       if (chunkResponses) {
         const today = new Date();
         const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate());
+        nextWeek.setDate(today.getDate()+1);
         nextWeek.setHours(0, 0, 0, 0);
 
         // เปลี่ยนเวลาให้เป็น 23:59:00
@@ -327,7 +327,7 @@ class HieService {
         // จัดรูปแบบวันที่ในรูปแบบ "yyyy-MM-dd"
         const formattedDate = today.toISOString().slice(0, 10);
         const formattedNextWeek = nextWeek.toISOString().slice(0, 10);
-        console.log(formattedNextWeek)
+        console.log(nextWeek)
         await axios.post(
           "/",
           { date: maxDate, dateUpdate: formattedNextWeek + " 19.59.00" },
