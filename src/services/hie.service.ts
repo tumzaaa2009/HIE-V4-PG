@@ -539,7 +539,7 @@ class HieService {
                   });
                 }
               }
-              // หัตถกา
+              // หัตถการ
               const procedcode = result[index].procedcode;
               if (procedcode != null) {
                 if (currentProcedCode === null || currentProcedCode !== procedcode) {
