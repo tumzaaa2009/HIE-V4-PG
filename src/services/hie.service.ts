@@ -511,54 +511,66 @@ class HieService {
           let currentDidstd = null;
           let currentProcedCode = null;
           let curretLabsFull = null;
-          for (let index = 0; index < result.length; index++) {
-            // lab
-            const labtest = result[index].labtest;
-            if (labtest != null) {
-              if (curretLabsFull === null || curretLabsFull !== labtest) {
-                labOpd.labfu.push({
-                  labtest: result[index].labtest,
-                  labname: result[index].labname,
-                  labresult: result[index].labresult,
-                  labnormal: result[index].labnormal,
-                });
+         for (let index = 0; index < result.length; index++) {
+              // lab
+              const labtest = result[index].labtest;
+              if (labtest != null) {
+                const existingLabsIndex = labOpd.labfu.findIndex(item => item.labtest === labtest);
+                if (existingLabsIndex === -1) {
+                  if (curretLabsFull === null || curretLabsFull !== labtest) {
+                    labOpd.labfu.push({
+                      labtest: result[index].labtest,
+                      labname: result[index].labname,
+                      labresult: result[index].labresult,
+                      labnormal: result[index].labnormal,
+                    });
+                  }
+                }
               }
-            }
-            // diageOPd
-            const icodeDiag = result[index].icode;
-            if (icodeDiag != null) {
-              if (currentDiagCode === null || currentDiagCode !== icodeDiag) {
-                daigOpd.diag_opd.push({
-                  diagtype: result[index].diagtype,
-                  diagcode: result[index].icode,
-                  diagname: result[index].diagname
-                });
+              // diageOPd
+              const icodeDiag = result[index].icode;
+              if (icodeDiag != null) {
+                if (currentDiagCode === null || currentDiagCode !== icodeDiag) {
+                  const existingLabsIndex = daigOpd.diag_opd.findIndex(item => item.icode === icodeDiag);
+                  daigOpd.diag_opd.push({
+                    diagtype: result[index].diagtype,
+                    diagcode: result[index].icode,
+                    diagname: result[index].diagname,
+                  });
+                }
               }
-            }
-            // หัตถการ
-            const procedcode = result[index].procedcode;
-            if (procedcode != null) {
-              if (currentProcedCode === null || currentProcedCode !== procedcode) {
-                procudureOpd.procudure_opd.push({
-                  procedcode: procedcode,
-                  procedname: result[index].procedname,
-                });
+              // หัตถการ
+              const procedcode = result[index].procedcode;
+              if (procedcode != null) {
+                if (currentProcedCode === null || currentProcedCode !== procedcode) {
+                  const existingProcedIndex = procudureOpd.procudure_opd.findIndex(item => item.procedcode === procedcode);
+                 
+                  if (existingProcedIndex === -1) {
+                    procudureOpd.procudure_opd.push({
+                      procedcode: procedcode,
+                      procedname: result[index].procedname,
+                    });
+                  }
+                }
               }
-            }
-            // รายการยา
-            const did = result[index].did;
-            if (did != null) {
-              if (currentDidstd === null || currentDidstd !== did) {
-                currentDidstd = did;
-                drugOpd.drug_opd.push({
-                  didstd: did,
-                  drugname: result[index].drugname,
-                  amount: result[index].amount,
-                  unit: result[index].units,
-                  usage: result[index].drugusage,
-                });
+              // รายการยา
+              const did = result[index].did;
+              if (did != null) {
+                if (currentDidstd === null || currentDidstd !== did) {
+                  currentDidstd = did;
+                  const existingDidIndex = drugOpd.drug_opd.findIndex(item => item.didstd === did);
+                  if (existingDidIndex === -1) {
+                    drugOpd.drug_opd.push({
+                      didstd: did,
+                      drugname: result[index].drugname,
+                      amount: result[index].amount,
+                      unit: result[index].units,
+                      usage: result[index].drugusage,
+                    });
+                  }
+                }
               }
-            }
+            
 
           }
 
