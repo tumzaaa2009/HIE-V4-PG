@@ -410,7 +410,7 @@ class HieService {
                 ],
               });
             }
-            const data = {ฟเำ
+            const data = {
               status: "200",
               message: "OK",
               person: {
@@ -423,7 +423,7 @@ class HieService {
                 lname: `${queryResult[0].lname}`,
                 sex: `${queryResult[0].sex}`,
                 birth: `${moment(queryResult[0].birthday).format("YYYY-MM-DD")}`,
-                age: ${queryResult[0].age},
+                age: `${queryResult[0].age}`,
               },
               visit: [{ date_serv: "2020-12-17", diag_opd: "" }],
 
