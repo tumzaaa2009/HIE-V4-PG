@@ -8,7 +8,7 @@ import hpp from 'hpp';
 import morgan from 'morgan';
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
-import { NODE_ENV, PORT, LOG_FORMAT, ORIGIN, CREDENTIALS,SSL_CRT_FILE,SSL_KEY_FILE,SSL_CHAIN_FILE } from '@config';
+import { NODE_ENV, PORT, LOG_FORMAT, ORIGIN, CREDENTIALS, SSL_CRT_FILE, SSL_KEY_FILE, SSL_CHAIN_FILE,hospCodeEnv,URL_Hos} from '@config';
 import { Routes } from '@interfaces/routes.interface';
 import { ErrorMiddleware } from '@middlewares/error.middleware';
 import { logger, stream } from '@utils/logger';
@@ -21,22 +21,52 @@ export class App {
   public port: string | number;
   public httpsOption;
   public server;
+  public socketIo;
+  public io;
   constructor(routes: Routes[]) {
+    this.SocketIo()
     this.app = express();
     this.env = NODE_ENV || 'development';
-    this.port = PORT ;
+    this.port = PORT;
     this.httpsOption = {
-       cert: fs.readFileSync(path.join(__dirname, `${SSL_CRT_FILE}`)),
-       key: fs.readFileSync(path.join(__dirname, `${SSL_KEY_FILE}`)),
-       chain : fs.readFileSync(path.join(__dirname, `${SSL_CHAIN_FILE}`)),
+      cert: fs.readFileSync(path.join(__dirname, `${SSL_CRT_FILE}`)),
+      key: fs.readFileSync(path.join(__dirname, `${SSL_KEY_FILE}`)),
+      chain: fs.readFileSync(path.join(__dirname, `${SSL_CHAIN_FILE}`)),
     };
     this.server = require('https').createServer(this.httpsOption, this.app);
     this.initializeMiddlewares();
     this.initializeRoutes(routes);
     this.initializeSwagger();
     this.initializeErrorHandling();
+    this.SocketIo()
   }
 
+  public SocketIo() {
+    this.io = require('socket.io')(this.server, {
+
+      transport: ['websocket', 'polling', 'flashsocket'],
+      cors: {
+        origins: 'https://rh4cloudcenter.moph.go.th',
+        methods: ['GET', 'POST'],
+        allowedHeaders: ['my-socket-hie'],
+        credentials: true,
+      },
+    });
+
+    this.io.on('connection', (socket: any) => {
+   
+      socket.emit("connecting", {
+        hosCode: hospCodeEnv,
+        url: URL_Hos,
+      });
+
+
+    })
+
+  }
+  public Io() {
+    return this.io;
+  }
   public listen() {
     this.server.listen(this.port, () => {
       logger.info(`=================================`);
