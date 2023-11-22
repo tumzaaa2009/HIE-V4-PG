@@ -1,12 +1,12 @@
-import postgres from 'postgres';
+const { Pool } = require('pg');
 import { POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_DB } from '@config';
 
-const sql = postgres({
-  host: POSTGRES_HOST, // Use the environment variable
-  port: parseInt(POSTGRES_PORT, 10), // Convert to a number
-  database: POSTGRES_DB, // Use the environment variable
-  username: POSTGRES_USER, // Use the environment variable
-  password: POSTGRES_PASSWORD, // Use the environment variable
+const sql = new Pool({
+  user: POSTGRES_USER,
+  host:POSTGRES_HOST ,
+  database: POSTGRES_DB,
+  password: POSTGRES_PASSWORD,
+  port: POSTGRES_PORT,
 });
 
 export default sql;
