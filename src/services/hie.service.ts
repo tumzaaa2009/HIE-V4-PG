@@ -148,28 +148,29 @@ class HieService {
       let maxDate = "";
 
       const formattedResult = await new Promise((resolve, reject) => {
-        async function fetchRecords(checkVisitListDate) {
-          const query = sql`
+
+        const query = {
+          text: `
             SELECT 
               a.cid AS cid,
-              '${hospCodeEnv}' AS hospcode,
+              $1 AS hospcode,
               16 AS provinceCode,
               MAX(a.vstdate) AS vstdate 
             FROM vn_stat a 
             WHERE CHAR_LENGTH(a.cid) = 13 
               AND a.cid NOT LIKE '0%' 
               AND a.vstdate <= NOW()
-              AND a.vstdate BETWEEN ${checkVisitListDate} AND NOW()
+              AND a.vstdate BETWEEN $2 AND NOW()
             GROUP BY a.cid;
-          `;
-          const records = await query;
-          maxDate = moment(records[0].vstdate).format("YYYY-MM-DD")
-          console.log(maxDate)
-          resolve(records); // รีเทิร์นค่า queryResult ดังกล่าว
-        }
-        fetchRecords(checkVisitListDate)
+          `, values: [hospCodeEnv, checkVisitListDate],
+        };
+        sql.query(query).then(queryResult => {
+          console.log(queryResult.rows)
+          maxDate = moment(queryResult.rows[0].vstdate).format("YYYY-MM-DD")
+          resolve(queryResult.rows); // รีเทิร์นค่า queryResult ดังกล่าว
+        })
+
       });
-      console.log("gggg")
       const dataChunksVisitList = await splitDataVisit(formattedResult, batchSize);
       const responsesArray = [];
       for (const chunk of dataChunksVisitList) {
@@ -180,7 +181,7 @@ class HieService {
             lastVisit: moment(item.lastVisit).format('YYYY-MM-DD'),
             provinceCode: item.provinceCode,
           };
-       
+
           try {
             const response = await axios.post(
               `${END_POINT}/eventvisitcashe/`,
@@ -202,7 +203,7 @@ class HieService {
       if (responsesArray) {
         const today = new Date();
         const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate()+1);
+        nextWeek.setDate(today.getDate() + 1);
         nextWeek.setHours(0, 0, 0, 0);
         nextWeek.setHours(23, 59, 0, 0);
         const axiosConfig = {
@@ -224,7 +225,7 @@ class HieService {
   }
 
 
- public async ServiceDrugAllgyCashe(
+  public async ServiceDrugAllgyCashe(
     token: string,
     visitList: string
   ): Promise<void> {
@@ -253,38 +254,39 @@ class HieService {
       let maxDate = "";
 
       const formattedResult = await new Promise((resolve, reject) => {
-        sql`
-        SELECT 
-                  pa.cid AS cid,
-                  10690 AS hospcode,
-                  DATE(a.report_date) AS update_date,
-                  a.agent AS agent,
-                  a.agent_code24 AS icode,
-                  a.symptom AS drugsymptom
+        const query = {
+          text: `   SELECT 
+          pa.cid AS cid,
+          $1 AS hospcode,
+          DATE(a.report_date) AS update_date,
+          a.agent AS agent,
+          a.agent_code24 AS icode,
+          a.symptom AS drugsymptom
           FROM opd_allergy a
           LEFT JOIN patient pa ON pa.hn = a.hn
           LEFT JOIN drugitems aitem ON aitem.name = a.agent
           WHERE pa.cid != '' 
-                AND LENGTH(pa.cid) = 13
-                AND pa.cid NOT LIKE '0%'
-                AND report_date IS NOT NULL
-                AND DATE(a.report_date) BETWEEN ${checkVisitCaheResult} AND NOW()
-          ORDER BY a.report_date DESC; `
-          .then((queryResult) => {
+          AND LENGTH(pa.cid) = 13
+          AND pa.cid NOT LIKE '0%'
+          AND report_date IS NOT NULL
+          AND DATE(a.report_date) BETWEEN $2 AND NOW()
+        ORDER BY a.report_date DESC; `, values: [hospCodeEnv, checkVisitCaheResult],
+        }
+        sql.query(query)
+          .then(queryResult => {
+            console.log(queryResult.rows)
             const originalDate = moment(
-              queryResult[0].update_date,
-              "YYYY-MM-DD"
-            );
+              queryResult.rows[0].update_date,
+              "YYYY-MM-DD")
             const previousDate = originalDate
               .subtract("days")
               .format("YYYY-MM-DD");
             maxDate = previousDate;
-            const formattedResult = formatResult(queryResult);
+            const formattedResult = formatResult(queryResult.rows);
             resolve(formattedResult);
+          }).catch(error => {
+            console.error('Error executing query', error);
           })
-          .catch((error) => {
-            reject(error);
-          });
       });
 
       const dataChunks = await splitDataIntoChunks(formattedResult, batchSize);
@@ -313,7 +315,7 @@ class HieService {
       if (chunkResponses) {
         const today = new Date();
         const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate()+1);
+        nextWeek.setDate(today.getDate() + 1);
         nextWeek.setHours(0, 0, 0, 0);
 
         // เปลี่ยนเวลาให้เป็น 23:59:00
@@ -337,7 +339,7 @@ class HieService {
 
         return chunkResponses;
       }
-      
+
     } catch (error) {
       console.error(error);
     }
@@ -374,7 +376,7 @@ class HieService {
       const callGetVisit = new Promise((resolve, reject) => {
         const query = {
           text: `
-            SELECT '${hospCodeEnv}' as hcode, (SELECT name FROM hospcode WHERE hospcode = '10690') AS hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name AS sex, date_part('year', age(p.birthday)) AS age, p.birthday, v.vstdate,
+            SELECT $1 as hcode, (SELECT name FROM hospcode WHERE hospcode = '10690') AS hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name AS sex, date_part('year', age(p.birthday)) AS age, p.birthday, v.vstdate,
             STRING_AGG(DISTINCT dt.name, ', ') AS diagtype,
             STRING_AGG(DISTINCT ov.icd10, ', ') AS diagcode,
             STRING_AGG(DISTINCT icd.name, ', ') AS diagname,
@@ -393,29 +395,29 @@ class HieService {
             LEFT OUTER JOIN drugusage dr ON dr.drugusage = op.drugusage
             LEFT OUTER JOIN ovstoprt pr ON pr.vn = v.vn
             LEFT OUTER JOIN icd9cm1 cm ON cm.code = pr.icd9cm
-            WHERE p.cid = $1
+            WHERE p.cid = $2
             GROUP BY p.hcode, hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name, age, p.birthday, v.vstdate
             ORDER BY v.vstdate DESC;
           `,
-          values: [checkToken.msg.cidPatient],
+          values: [hospCodeEnv, checkToken.msg.cidPatient],
         };
-        
+
         sql.query(query)
           .then(queryResult => {
             let visitListArray = { visit: [] };
-                for (let index = 0; index < queryResult.rows.length; index++) {
-                  visitListArray.visit.push({
-                    date_serv: `${moment(queryResult.rows[index].vstdate).format('YYYY-MM-DD')}`,
-                    diag_opd: [
-                      {
-                        diagtype: `${queryResult.rows[index].diagtype}`,
-                        diagcode: `${queryResult.rows[index].diagcode}`,
-                        diagname: `${queryResult.rows[index].diagname}`,
-                      },
-                    ],
-                  });
-                }
-       const data = {
+            for (let index = 0; index < queryResult.rows.length; index++) {
+              visitListArray.visit.push({
+                date_serv: `${moment(queryResult.rows[index].vstdate).format('YYYY-MM-DD')}`,
+                diag_opd: [
+                  {
+                    diagtype: `${queryResult.rows[index].diagtype}`,
+                    diagcode: `${queryResult.rows[index].diagcode}`,
+                    diagname: `${queryResult.rows[index].diagname}`,
+                  },
+                ],
+              });
+            }
+            const data = {
               status: "200",
               message: "OK",
               person: {
@@ -436,12 +438,12 @@ class HieService {
               visit: visitListArray.visit,
             };
             resolve(patientWithVisits)
-             
+
           })
           .catch(error => {
             console.error('Error executing query', error);
           })
-        
+
       });
       return callGetVisit;
     } else {
@@ -481,144 +483,10 @@ class HieService {
     ) {
       const callGetVisit = new Promise((resovle, reject) => {
         //  ส่งค่า listdate ชองคนไข้
- 
-      //   sql`select p.hcode as hospcode,hosp.name as hosname,p.cid,v.hn,p.pname,p.fname,p.lname,sex.name as sex,p.birthday,date_part('year',age(p.birthday)) age,
-      //   v.vstdate as date_serv,sc.temperature as btemp,sc.bps as systolic,sc.bpd as diastolic,sc.pulse,sc.rr as respiratory,sc.height as height,sc.waist as weight,sc.bmi
-      //   ,concat(sc.cc,',',sc.hpi,',',p.clinic) as chiefcomp,ov.icd10 as diagcode,icd.name as diagname,v.dx_doctor,doc.name as doctor,dt.name as diagtype ,op.icode,
-      //   drug.did,concat(drug.name,' ',drug.strength) as drugname,op.qty as amount,drug.units,dr.code as drugusage,opr.icd9 as procedcode,cm.name as procedname
-      //   ,lo.lab_items_code as labtest,li.lab_items_name as labname,lo.lab_order_result as labresult,li.lab_items_normal_value as labnormal  
-      //   from vn_stat v
-      //   LEFT OUTER JOIN patient p ON p.hn = v.hn
-      //   LEFT OUTER JOIN sex sex ON sex.code = p.sex
-      //   LEFT OUTER JOIN hospcode hosp ON hosp.hospcode = p.hcode
-      //   LEFT OUTER JOIN opdscreen sc ON sc.vn = v.vn
-      //   LEFT OUTER JOIN opdscreen_cc_list scl ON scl.vn = v.vn
-      //   LEFT OUTER JOIN ovstdiag ov ON ov.vn = v.vn
-      //   LEFT OUTER JOIN diagtype dt ON dt.diagtype = ov.diagtype
-      //   LEFT OUTER JOIN icd101  icd ON icd.code =  ov.icd10
-      //   LEFT OUTER JOIN opitemrece op On op.vn = v.vn  --AND op.income IN ('03','04','17')
-      //   LEFT OUTER JOIN drugitems drug ON drug.icode = op.icode
-      //   LEFT OUTER JOIN drugusage dr ON dr.drugusage = op.drugusage
-      //   LEFT OUTER JOIN ovstoprt pr ON pr.vn = v.vn
-      //   LEFT OUTER JOIN doctor doc ON doc.code = v.dx_doctor
-      //   LEFT OUTER JOIN icd9cm1 cm ON cm.code = pr.icd9cm
-      //   LEFT OUTER JOIN doctor_operation opr ON opr.vn = sc.vn
-      //   LEFT OUTER JOIN lab_head lh on lh.vn = sc.vn
-      //   LEFT OUTER JOIN lab_order lo on lo.lab_order_number = lh.lab_order_number
-      //   LEFT OUTER JOIN lab_items li on li.lab_items_code = lo.lab_items_code
-      //   where p.cid = ${checkToken.msg.cidPatient}   and v.vstdate = ${date_serv};
-      // `   .then((result) => {
-      //     let daigOpd = { diag_opd: [] };
-      //     let drugOpd = { drug_opd: [] };
-      //     let procudureOpd = { procudure_opd: [] };
-      //     let labOpd = { labfu: [] };
-      //     let currentDiagCode = null;
-      //     let currentDidstd = null;
-      //     let currentProcedCode = null;
-      //     let curretLabsFull = null;
-      //    for (let index = 0; index < result.length; index++) {
-      //         // lab
-      //         const labtest = result[index].labtest;
-      //         if (labtest != null) {
-      //           const existingLabsIndex = labOpd.labfu.findIndex(item => item.labtest === labtest);
-      //           if (existingLabsIndex === -1) {
-      //             if (curretLabsFull === null || curretLabsFull !== labtest) {
-      //               labOpd.labfu.push({
-      //                 labtest: result[index].labtest,
-      //                 labname: result[index].labname,
-      //                 labresult: result[index].labresult,
-      //                 labnormal: result[index].labnormal,
-      //               });
-      //             }
-      //           }
-      //         }
-      //         // diageOPd
-      //         const icodeDiag = result[index].icode;
-      //         if (icodeDiag != null) {
-      //           if (currentDiagCode === null || currentDiagCode !== icodeDiag) {
-      //             const existingLabsIndex = daigOpd.diag_opd.findIndex(item => item.icode === icodeDiag);
-      //             daigOpd.diag_opd.push({
-      //               diagtype: result[index].diagtype,
-      //               diagcode: result[index].icode,
-      //               diagname: result[index].diagname,
-      //             });
-      //           }
-      //         }
-      //         // หัตถการ
-      //         const procedcode = result[index].procedcode;
-      //         if (procedcode != null) {
-      //           if (currentProcedCode === null || currentProcedCode !== procedcode) {
-      //             const existingProcedIndex = procudureOpd.procudure_opd.findIndex(item => item.procedcode === procedcode);
-                 
-      //             if (existingProcedIndex === -1) {
-      //               procudureOpd.procudure_opd.push({
-      //                 procedcode: procedcode,
-      //                 procedname: result[index].procedname,
-      //               });
-      //             }
-      //           }
-      //         }
-      //         // รายการยา
-      //         const did = result[index].did;
-      //         if (did != null) {
-      //           if (currentDidstd === null || currentDidstd !== did) {
-      //             currentDidstd = did;
-      //             const existingDidIndex = drugOpd.drug_opd.findIndex(item => item.didstd === did);
-      //             if (existingDidIndex === -1) {
-      //               drugOpd.drug_opd.push({
-      //                 didstd: did,
-      //                 drugname: result[index].drugname,
-      //                 amount: result[index].amount,
-      //                 unit: result[index].units,
-      //                 usage: result[index].drugusage,
-      //               });
-      //             }
-      //           }
-      //         }
-            
 
-      //     }
 
-      //     const getDatePatient: any = {
-      //       status: '200',
-      //       message: 'OK',
-      //       person: {
-      //         hospcode: `${hospCodeEnv}`,
-      //         hospname: `${hospNameEnv}`,
-      //         cid: result[0].cid,
-      //         hn: result[0].hn,
-      //         prename: result[0].pname,
-      //         name: result[0].fname,
-      //         lname: result[0].lname,
-      //         sex: result[0].sex,
-      //         birth: moment(result[0].birthday).format('YYYY-MM-DD'),
-      //         age: result[0].age,
-      //       },
-      //       visit: {
-      //         date_serv: moment(result[0].date_serv).format('YYYY-MM-DD'),
-      //         btemp: result[0].btemp,
-      //         systolic: result[0].systolic,
-      //         diastolic: result[0].diastolic,
-      //         pulse: result[0].pulse,
-      //         respiratory: result[0].respiratory,
-      //         height: result[0].height,
-      //         weight: result[0].weight,
-      //         bmi: result[0].bmi,
-      //         chiefcomp: result[0].chiefcomp,
-      //         doctor: result[0].doctor,
-      //         diag_opd: daigOpd.diag_opd,
-      //         drug_opd: drugOpd.drug_opd,
-      //         procudure_opd: procudureOpd.procudure_opd,
-      //         labfu: labOpd.labfu,
-      //       },
-      //     };
-      //     resovle(getDatePatient);
-      //   })
-      //     .catch((error) => {
-      //       reject(error);
-      //     });
-      const queryGetVisitDate = {
-        text: `
+        const queryGetVisitDate = {
+          text: `
           SELECT p.hcode as hospcode, hosp.name as hosname, p.cid, v.hn, p.pname, p.fname, p.lname, sex.name as sex, p.birthday,
           date_part('year', age(p.birthday)) as age, v.vstdate as date_serv, sc.temperature as btemp, sc.bps as systolic, 
           sc.bpd as diastolic, sc.pulse, sc.rr as respiratory, sc.height as height, sc.waist as weight, sc.bmi,
@@ -647,21 +515,21 @@ class HieService {
           LEFT OUTER JOIN lab_items li ON li.lab_items_code = lo.lab_items_code
           WHERE p.cid = $1 AND v.vstdate = $2;
         `,
-        values: [checkToken.msg.cidPatient, date_serv],
-      };
-      
-      sql.query(queryGetVisitDate)
-        .then(queryResult => {
-          console.log(queryResult.rows);
-     let daigOpd = { diag_opd: [] };
-          let drugOpd = { drug_opd: [] };
-          let procudureOpd = { procudure_opd: [] };
-          let labOpd = { labfu: [] };
-          let currentDiagCode = null;
-          let currentDidstd = null;
-          let currentProcedCode = null;
-          let curretLabsFull = null;
-         for (let index = 0; index < queryResult.rows.length; index++) {
+          values: [checkToken.msg.cidPatient, date_serv],
+        };
+
+        sql.query(queryGetVisitDate)
+          .then(queryResult => {
+            console.log(queryResult.rows);
+            let daigOpd = { diag_opd: [] };
+            let drugOpd = { drug_opd: [] };
+            let procudureOpd = { procudure_opd: [] };
+            let labOpd = { labfu: [] };
+            let currentDiagCode = null;
+            let currentDidstd = null;
+            let currentProcedCode = null;
+            let curretLabsFull = null;
+            for (let index = 0; index < queryResult.rows.length; index++) {
               // lab
               const labtest = queryResult.rows[index].labtest;
               if (labtest != null) {
@@ -694,7 +562,7 @@ class HieService {
               if (procedcode != null) {
                 if (currentProcedCode === null || currentProcedCode !== procedcode) {
                   const existingProcedIndex = procudureOpd.procudure_opd.findIndex(item => item.procedcode === procedcode);
-                 
+
                   if (existingProcedIndex === -1) {
                     procudureOpd.procudure_opd.push({
                       procedcode: procedcode,
@@ -721,46 +589,46 @@ class HieService {
                 }
               }
             }
-                  const getDatePatient: any = {
-            status: '200',
-            message: 'OK',
-            person: {
-              hospcode: `${hospCodeEnv}`,
-              hospname: `${hospNameEnv}`,
-              cid: queryResult.rows[0].cid,
-              hn: queryResult.rows[0].hn,
-              prename: queryResult.rows[0].pname,
-              name: queryResult.rows[0].fname,
-              lname: queryResult.rows[0].lname,
-              sex: queryResult.rows[0].sex,
-              birth: moment(queryResult.rows[0].birthday).format('YYYY-MM-DD'),
-              age: queryResult.rows[0].age,
-            },
-            visit: {
-              date_serv: moment(queryResult.rows[0].date_serv).format('YYYY-MM-DD'),
-              btemp: queryResult.rows[0].btemp,
-              systolic: queryResult.rows[0].systolic,
-              diastolic: queryResult.rows[0].diastolic,
-              pulse: queryResult.rows[0].pulse,
-              respiratory: queryResult.rows[0].respiratory,
-              height: queryResult.rows[0].height,
-              weight: queryResult.rows[0].weight,
-              bmi: queryResult.rows[0].bmi,
-              chiefcomp: queryResult.rows[0].chiefcomp,
-              doctor: queryResult.rows[0].doctor,
-              diag_opd: daigOpd.diag_opd,
-              drug_opd: drugOpd.drug_opd,
-              procudure_opd: procudureOpd.procudure_opd,
-              labfu: labOpd.labfu,
-            },
-          };
-          resovle(getDatePatient);
-        })
-        .catch(error => {
-          console.error('Error executing query', error);
-        })  
+            const getDatePatient: any = {
+              status: '200',
+              message: 'OK',
+              person: {
+                hospcode: `${hospCodeEnv}`,
+                hospname: `${hospNameEnv}`,
+                cid: queryResult.rows[0].cid,
+                hn: queryResult.rows[0].hn,
+                prename: queryResult.rows[0].pname,
+                name: queryResult.rows[0].fname,
+                lname: queryResult.rows[0].lname,
+                sex: queryResult.rows[0].sex,
+                birth: moment(queryResult.rows[0].birthday).format('YYYY-MM-DD'),
+                age: queryResult.rows[0].age,
+              },
+              visit: {
+                date_serv: moment(queryResult.rows[0].date_serv).format('YYYY-MM-DD'),
+                btemp: queryResult.rows[0].btemp,
+                systolic: queryResult.rows[0].systolic,
+                diastolic: queryResult.rows[0].diastolic,
+                pulse: queryResult.rows[0].pulse,
+                respiratory: queryResult.rows[0].respiratory,
+                height: queryResult.rows[0].height,
+                weight: queryResult.rows[0].weight,
+                bmi: queryResult.rows[0].bmi,
+                chiefcomp: queryResult.rows[0].chiefcomp,
+                doctor: queryResult.rows[0].doctor,
+                diag_opd: daigOpd.diag_opd,
+                drug_opd: drugOpd.drug_opd,
+                procudure_opd: procudureOpd.procudure_opd,
+                labfu: labOpd.labfu,
+              },
+            };
+            resovle(getDatePatient);
+          })
+          .catch(error => {
+            console.error('Error executing query', error);
+          })
       });
-       
+
       return callGetVisit;
     } else {
       return { status: 400, msg: "ticket หมดอายุ" };
