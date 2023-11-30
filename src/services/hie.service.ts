@@ -161,7 +161,8 @@ class HieService {
               AND a.cid NOT LIKE '0%' 
               AND a.vstdate <= NOW()
               AND a.vstdate BETWEEN $2 AND NOW()
-            GROUP BY a.cid;
+            GROUP BY a.cid
+            ORDER BY vstdate DESC;
           `, values: [hospCodeEnv, checkVisitListDate],
         };
         sql.query(query).then(queryResult => {
@@ -493,7 +494,7 @@ class HieService {
           concat(sc.cc, ',', sc.hpi, ',', p.clinic) as chiefcomp, ov.icd10 as diagcode, icd.name as diagname, v.dx_doctor,
           doc.name as doctor, dt.name as diagtype, op.icode, drug.did, concat(drug.name, ' ', drug.strength) as drugname,
           op.qty as amount, drug.units, dr.code as drugusage, opr.icd9 as procedcode, cm.name as procedname, lo.lab_items_code as labtest,
-          li.lab_items_name as labname, lo.lab_order_result as labresult, li.lab_items_normal_value as labnormal
+          li.lab_items_name as labname, lo.lab_order_result as labresult, li.lab_items_normal_value as labnormal,sc.pe
           FROM vn_stat v
           LEFT OUTER JOIN patient p ON p.hn = v.hn
           LEFT OUTER JOIN sex sex ON sex.code = p.sex
@@ -615,6 +616,7 @@ class HieService {
                 weight: queryResult.rows[0].weight,
                 bmi: queryResult.rows[0].bmi,
                 chiefcomp: queryResult.rows[0].chiefcomp,
+                physical_exam : queryResult.rows[0].pe,
                 doctor: queryResult.rows[0].doctor,
                 diag_opd: daigOpd.diag_opd,
                 drug_opd: drugOpd.drug_opd,

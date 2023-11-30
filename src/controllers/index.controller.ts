@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
-
+import {  hospCodeEnv } from "@config";
 class IndexController {
   public index = (req: Request, res: Response, next: NextFunction): void => {
-    res.send('<h1>Rh4cloudcenter!</h1>');
+    res.send({hospCode:hospCodeEnv,value : "Rh4cloudcenter!"})
   };
 }
 
