@@ -465,20 +465,23 @@ class HieService {
               diagname: `${resQueryVisitList.rows[index].diagname}`,
             };
           
-            if (existingDateIndex !== -1) {
-              // ตรวจสอบว่า diagcode นี้มีอยู่ใน diag_opd แล้วหรือไม่
-              const existingDiagIndex = visitListArray.visit[existingDateIndex].diag_opd.findIndex(item => item.diagcode === newDiag.diagcode);
+            // ตรวจสอบว่า diagcode ไม่เท่ากับค่าว่างหรือ null
+            if (newDiag.diagcode !== '' && newDiag.diagcode !== "null") {
+              if (existingDateIndex !== -1) {
+                // ตรวจสอบว่า diagcode นี้มีอยู่ใน diag_opd แล้วหรือไม่
+                const existingDiagIndex = visitListArray.visit[existingDateIndex].diag_opd.findIndex(item => item.diagcode === newDiag.diagcode);
           
-              if (existingDiagIndex === -1) {
-                // ถ้ายังไม่มีให้เพิ่มเฉพาะถ้าไม่ซ้ำ
-                visitListArray.visit[existingDateIndex].diag_opd.push(newDiag);
+                if (existingDiagIndex === -1) {
+                  // ถ้ายังไม่มีให้เพิ่มเฉพาะถ้าไม่ซ้ำ
+                  visitListArray.visit[existingDateIndex].diag_opd.push(newDiag);
+                }
+              } else {
+                // ถ้าไม่มีวันที่นี้ใน visitListArray ให้สร้างใหม่
+                visitListArray.visit.push({
+                  date_serv: currentDate,
+                  diag_opd: [newDiag],
+                });
               }
-            } else {
-              // ถ้าไม่มีวันที่นี้ใน visitListArray ให้สร้างใหม่
-              visitListArray.visit.push({
-                date_serv: currentDate,
-                diag_opd: [newDiag],
-              });
             }
           }
 
