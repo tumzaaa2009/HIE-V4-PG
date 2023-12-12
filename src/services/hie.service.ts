@@ -2,7 +2,7 @@ import sql from "@/dbconfig";
 const batchSize: number = 2000; // จำนวนรายการที่จะส่งในแต่ละครั้ง
 import axios from "axios";
 import moment from "moment";
-import { Token_DrugAllgy, END_POINT, hospCodeEnv, hospNameEnv } from "@config";
+import { Token_DrugAllgy, END_POINT, hospCodeEnv, hospNameEnv, provinceCode } from "@config";
 import { queryResult } from "pg-promise";
 const { Client } = require('pg');
 const client = new Client()
@@ -154,7 +154,7 @@ class HieService {
             SELECT 
               a.cid AS cid,
               $1 AS hospcode,
-              16 AS provinceCode,
+              $3 AS provinceCode,
               MAX(a.vstdate) AS vstdate 
             FROM vn_stat a 
             WHERE CHAR_LENGTH(a.cid) = 13 
@@ -163,7 +163,7 @@ class HieService {
               AND a.vstdate BETWEEN $2 AND NOW()
             GROUP BY a.cid
             ORDER BY vstdate DESC;
-          `, values: [hospCodeEnv, checkVisitListDate],
+          `, values: [hospCodeEnv, checkVisitListDate, provinceCode],
         };
         sql.query(query).then(queryResult => {
           console.log(queryResult.rows)
@@ -374,51 +374,33 @@ class HieService {
       checkToken.msg.expireTicket >=
       moment(checkNewDate).format("YYYY-MM-DD HH:mm:ss")
     ) {
+      let visitListArray = { visit: [] };
       const callGetVisit = new Promise((resolve, reject) => {
         const query = {
-          text: `
-            SELECT $1 as hcode, (SELECT name FROM hospcode WHERE hospcode = '10690') AS hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name AS sex, date_part('year', age(p.birthday)) AS age, p.birthday, v.vstdate,
-            STRING_AGG(DISTINCT dt.name, ', ') AS diagtype,
-            STRING_AGG(DISTINCT ov.icd10, ', ') AS diagcode,
-            STRING_AGG(DISTINCT icd.name, ', ') AS diagname,
-            STRING_AGG(DISTINCT pr.icd9cm, ', ') AS icd9cm,
-            STRING_AGG(DISTINCT cm.name, ', ') AS name
-            FROM vn_stat v
-            LEFT OUTER JOIN patient p ON p.hn = v.hn
-            LEFT OUTER JOIN sex sex ON sex.code = p.sex
-            LEFT OUTER JOIN opdscreen sc ON sc.vn = v.vn
-            LEFT OUTER JOIN opdscreen_cc_list scl ON scl.vn = v.vn
-            LEFT OUTER JOIN ovstdiag ov ON ov.vn = v.vn
-            LEFT OUTER JOIN diagtype dt ON dt.diagtype = ov.diagtype
-            LEFT OUTER JOIN icd101 icd ON icd.code = ov.icd10
-            LEFT OUTER JOIN opitemrece op ON op.vn = v.vn AND op.income IN ('03', '04', '17')
-            LEFT OUTER JOIN drugitems drug ON drug.icode = op.icode
-            LEFT OUTER JOIN drugusage dr ON dr.drugusage = op.drugusage
-            LEFT OUTER JOIN ovstoprt pr ON pr.vn = v.vn
-            LEFT OUTER JOIN icd9cm1 cm ON cm.code = pr.icd9cm
-            WHERE p.cid = $2
-            GROUP BY p.hcode, hospname, p.cid, p.hn, p.pname, p.fname, p.lname, sex.name, age, p.birthday, v.vstdate
-            ORDER BY v.vstdate DESC;
+          text: ` SELECT
+          $1 AS hospcode,
+          (SELECT hospital_thai_name FROM hospital_profile) AS hosname,
+          p.cid,
+          p.hn,
+          p.pname,
+          p.fname,
+          p.lname,
+          sex.name AS sex, date_part('year', age(p.birthday)) AS age,
+			  p.birthday
+        FROM
+          patient p
+        LEFT OUTER JOIN sex sex ON sex.code = p.sex
+        WHERE
+          p.cid = $2
+            ;
           `,
           values: [hospCodeEnv, checkToken.msg.cidPatient],
         };
 
         sql.query(query)
           .then(queryResult => {
-            let visitListArray = { visit: [] };
-            for (let index = 0; index < queryResult.rows.length; index++) {
-              visitListArray.visit.push({
-                date_serv: `${moment(queryResult.rows[index].vstdate).format('YYYY-MM-DD')}`,
-                diag_opd: [
-                  {
-                    diagtype: `${queryResult.rows[index].diagtype}`,
-                    diagcode: `${queryResult.rows[index].diagcode}`,
-                    diagname: `${queryResult.rows[index].diagname}`,
-                  },
-                ],
-              });
-            }
-            const data = {
+
+            resolve({
               status: "200",
               message: "OK",
               person: {
@@ -433,12 +415,7 @@ class HieService {
                 birth: `${moment(queryResult.rows[0].birthday).format("YYYY-MM-DD")}`,
                 age: `${queryResult.rows[0].age}`,
               },
-            };
-            const patientWithVisits = {
-              ...data,
-              visit: visitListArray.visit,
-            };
-            resolve(patientWithVisits)
+            })
 
           })
           .catch(error => {
@@ -446,10 +423,85 @@ class HieService {
           })
 
       });
-      return callGetVisit;
+      const resolvedPatientWithVisits = await callGetVisit
+        .then(async (result) => {
+          console.log('Resolved result:', result.person.cid);
+          const query = {
+            text: `SELECT v.vstdate,
+          dt.name AS diagtype,
+          ov.icd10 AS diagcode,
+          icd.name AS diagname,
+          pr.icd9cm AS icd9cm,
+          cm.name AS name
+          FROM vn_stat v
+          LEFT OUTER JOIN patient p ON p.hn = v.hn
+          LEFT OUTER JOIN sex sex ON sex.code = p.sex
+          LEFT OUTER JOIN opdscreen sc ON sc.vn = v.vn
+          LEFT OUTER JOIN opdscreen_cc_list scl ON scl.vn = v.vn
+          LEFT OUTER JOIN ovstdiag ov ON ov.vn = v.vn
+          LEFT OUTER JOIN diagtype dt ON dt.diagtype = ov.diagtype
+          LEFT OUTER JOIN icd101 icd ON icd.code = ov.icd10
+          LEFT OUTER JOIN opitemrece op ON op.vn = v.vn AND op.income IN ('03', '04', '17')
+          LEFT OUTER JOIN drugitems drug ON drug.icode = op.icode
+          LEFT OUTER JOIN drugusage dr ON dr.drugusage = op.drugusage
+          LEFT OUTER JOIN ovstoprt pr ON pr.vn = v.vn
+          LEFT OUTER JOIN icd9cm1 cm ON cm.code = pr.icd9cm		   
+          WHERE p.cid= $1
+          ORDER BY ov.vstdate DESC
+            ;
+          `,
+            values: [result.person.cid],
+          };
+
+          // ใช้ async/await เพื่อรอคำตอบจาก Promise
+          const resQueryVisitList = await sql.query(query);
+
+          for (let index = 0; index < resQueryVisitList.rows.length; index++) {
+            const currentDate = moment(resQueryVisitList.rows[index].vstdate).format('YYYY-MM-DD');
+            const existingDateIndex = visitListArray.visit.findIndex(item => item.date_serv === currentDate);
+            const newDiag = {
+              diagtype: `${resQueryVisitList.rows[index].diagtype}`,
+              diagcode: `${resQueryVisitList.rows[index].diagcode}`,
+              diagname: `${resQueryVisitList.rows[index].diagname}`,
+            };
+          
+            if (existingDateIndex !== -1) {
+              // ตรวจสอบว่า diagcode นี้มีอยู่ใน diag_opd แล้วหรือไม่
+              const existingDiagIndex = visitListArray.visit[existingDateIndex].diag_opd.findIndex(item => item.diagcode === newDiag.diagcode);
+          
+              if (existingDiagIndex === -1) {
+                // ถ้ายังไม่มีให้เพิ่มเฉพาะถ้าไม่ซ้ำ
+                visitListArray.visit[existingDateIndex].diag_opd.push(newDiag);
+              }
+            } else {
+              // ถ้าไม่มีวันที่นี้ใน visitListArray ให้สร้างใหม่
+              visitListArray.visit.push({
+                date_serv: currentDate,
+                diag_opd: [newDiag],
+              });
+            }
+          }
+
+          const patientWithVisits = {
+            ...result,
+            visit: visitListArray.visit,
+          };
+
+          console.log(patientWithVisits);
+          return patientWithVisits;
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          throw error;
+        })
+    
+      return resolvedPatientWithVisits
+
+
     } else {
       return { status: 400, msg: "ticket หมดอายุ" };
     }
+
   }
 
   public async ServiceGetVisitListDate(
@@ -616,7 +668,7 @@ class HieService {
                 weight: queryResult.rows[0].weight,
                 bmi: queryResult.rows[0].bmi,
                 chiefcomp: queryResult.rows[0].chiefcomp,
-                physical_exam : queryResult.rows[0].pe,
+                physical_exam: queryResult.rows[0].pe,
                 doctor: queryResult.rows[0].doctor,
                 diag_opd: daigOpd.diag_opd,
                 drug_opd: drugOpd.drug_opd,

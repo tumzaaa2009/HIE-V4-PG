@@ -8,5 +8,8 @@
         "src/logs/*",
         "src/**/*.{spec,test}.ts"
     ],
+    "env": {
+        "NODE_ENV": "development"
+      },
     "exec": "ts-node -r tsconfig-paths/register --transpile-only src/server.ts"
 }
