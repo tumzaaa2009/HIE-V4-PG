@@ -4,6 +4,7 @@ import axios from "axios";
 import moment from "moment";
 import { Token_DrugAllgy, END_POINT, hospCodeEnv, hospNameEnv, provinceCode } from "@config";
 import { queryResult } from "pg-promise";
+import { resolve } from "path";
 const { Client } = require('pg');
 const client = new Client()
 const cron = require('node-cron');
@@ -109,7 +110,7 @@ async function DrugAxios(dataMap) {
         },
       }
     );
-    console.log(data)
+
     return data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -464,13 +465,13 @@ class HieService {
               diagcode: `${resQueryVisitList.rows[index].diagcode}`,
               diagname: `${resQueryVisitList.rows[index].diagname}`,
             };
-          
+
             // ตรวจสอบว่า diagcode ไม่เท่ากับค่าว่างหรือ null
             if (newDiag.diagcode !== '' && newDiag.diagcode !== "null") {
               if (existingDateIndex !== -1) {
                 // ตรวจสอบว่า diagcode นี้มีอยู่ใน diag_opd แล้วหรือไม่
                 const existingDiagIndex = visitListArray.visit[existingDateIndex].diag_opd.findIndex(item => item.diagcode === newDiag.diagcode);
-          
+
                 if (existingDiagIndex === -1) {
                   // ถ้ายังไม่มีให้เพิ่มเฉพาะถ้าไม่ซ้ำ
                   visitListArray.visit[existingDateIndex].diag_opd.push(newDiag);
@@ -490,14 +491,14 @@ class HieService {
             visit: visitListArray.visit,
           };
 
-          console.log(patientWithVisits);
+
           return patientWithVisits;
         })
         .catch((error) => {
           console.error('Error:', error);
           throw error;
         })
-    
+
       return resolvedPatientWithVisits
 
 
@@ -691,6 +692,413 @@ class HieService {
       return { status: 400, msg: "ticket หมดอายุ" };
     }
   }
+
+  public async ServiceCheckVisitTicketIpd(ticketCheckPassCode: string): Promise<void> {
+    const checkToken = await new Promise((reslove, reject) => {
+      try {
+        const { data, status } = axios
+          .post(
+            `${END_POINT}/checkticketid/`,
+            { ticket: ticketCheckPassCode }, // Use the passed dataDrug
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': `${Token_DrugAllgy}`,
+              },
+            },
+          )
+          .then(result => {
+            return reslove(result.data);
+          });
+      } catch (error) { }
+    });
+    const checkNewDate = new Date();
+    //เช็ค ticket ว่าหมดอายุรึยัง
+    if (checkToken.msg.expireTicket >= moment(checkNewDate).format('YYYY-MM-DD HH:mm:ss')) {
+
+      let visitListArray = { visit: [] };
+      const callGetVisitPatient = await new Promise((resolve, reject) => {
+        //  ส่งค่า listdate ชองคนไข้
+        const query = {
+          text: ` SELECT
+          $1 AS hospcode,
+          (SELECT hospital_thai_name FROM hospital_profile) AS hosname,
+          p.cid,
+          p.hn,
+          p.pname,
+          p.fname,
+          p.lname,
+          sex.name AS sex, date_part('year', age(p.birthday)) AS age,
+			  p.birthday
+        FROM
+          patient p
+        LEFT OUTER JOIN sex sex ON sex.code = p.sex
+        WHERE
+          p.cid = $2
+            ;
+          `,
+          values: [hospCodeEnv, checkToken.msg.cidPatient],
+        };
+        sql.query(query)
+          .then(queryResult => {
+            resolve({
+              status: "200",
+              message: "OK",
+              person: {
+                hospcode: `${hospCodeEnv}`,
+                hospname: `${hospNameEnv}`,
+                cid: `${queryResult.rows[0].cid}`,
+                hn: `${queryResult.rows[0].hn}`,
+                prename: `${queryResult.rows[0].pname}`,
+                name: `${queryResult.rows[0].fname}`,
+                lname: `${queryResult.rows[0].lname}`,
+                sex: `${queryResult.rows[0].sex}`,
+                birth: `${moment(queryResult.rows[0].birthday).format("YYYY-MM-DD")}`,
+                age: `${queryResult.rows[0].age}`,
+              },
+            })
+
+          })
+          .catch(error => {
+            console.error('Error executing query', error);
+          })
+      });
+
+      if (callGetVisitPatient.person.cid != '') {
+        const callGetVisitIpd: any = await new Promise((resolve, reject) => {
+          const valueHn = callGetVisitPatient.person.hn;
+          const queryDetailAdmit = {
+            text: `
+            SELECT ipt.an, ipt.regdate as admit_date, ipt.regtime as admit_time
+              , ipt.dchdate as discharge_date, ds.name as discharge_status
+              , dt.name as discharge_type, ans.admdate as los
+            FROM ipt 
+            LEFT OUTER JOIN dchstts ds ON ds.dchstts = ipt.dchstts
+            LEFT OUTER JOIN dchtype dt ON dt.dchtype = ipt.dchtype
+            LEFT OUTER JOIN an_stat ans ON ans.an = ipt.an  
+            WHERE ipt.hn=$1 
+            order by ipt.regdate  DESC
+          `, values: [valueHn]
+          };
+          sql.query(queryDetailAdmit).then(resIpd => {
+            resolve(resIpd.rows)
+          });
+        });
+        const promises = callGetVisitIpd.map(visit => {
+          const valueAn = visit.an;
+          return new Promise((resolve, reject) => {
+            const queryDiagIpd = {
+              text: `
+            SELECT  
+            ipt.modify_datetime  as diagtime,
+            c1.code as diagcode,
+            c1.name as diagname,
+            (SELECT name FROM diagtype WHERE diagtype = ipt.diagtype) as diagtype
+            FROM
+              iptdiag ipt
+            RIGHT JOIN
+              icd101 c1 ON c1.code = ipt.icd10
+            WHERE
+              ipt.an = $1`, values: [valueAn]
+            }
+            sql.query(queryDiagIpd).then(resDiagIpd => {
+              resolve({
+                ...visit, // Include original visit data
+                diag_ipd: resDiagIpd.rows, // Include diagnosis data
+              });
+            });
+
+          });
+        });
+
+        const result = await Promise.all(promises);
+        const modifiedResult = result.map(visitData => {
+          const modifiedVisitData = { ...visitData };
+          modifiedVisitData.admit_date = moment(visitData.admit_date).format('YYYY-MM-DD');
+          modifiedVisitData.discharge_date = moment(visitData.discharge_date).format('YYYY-MM-DD');
+          return modifiedVisitData;
+        });
+       
+        callGetVisitPatient.admit = modifiedResult;
+       
+        return callGetVisitPatient;
+
+      } else {
+        return { status: 400, msg: 'ticket หมดอายุ' };
+      }
+
+
+
+    }
+  }
+  public async ServiceAdmitAn(ticketCheckPassCode: string, dateServe, an): Promise<void> {
+    const checkToken = await new Promise((reslove, reject) => {
+      try {
+        const { data, status } = axios
+          .post(
+            `${END_POINT}/checkticketid/`,
+            { ticket: ticketCheckPassCode }, // Use the passed dataDrug
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': `${Token_DrugAllgy}`,
+              },
+            },
+          )
+          .then(result => {
+            return reslove(result.data);
+          });
+      } catch (error) { }
+    });
+    const checkNewDate = new Date();
+    //เช็ค ticket ว่าหมดอายุรึยัง
+    if (checkToken.msg.expireTicket >= moment(checkNewDate).format('YYYY-MM-DD HH:mm:ss')) {
+      let visitListArray = { visit: [] };
+      const callGetVisitPatient = await new Promise((resolve, reject) => {
+        //  ส่งค่า listdate ชองคนไข้
+        const query = {
+          text: `  select 
+                  $1 AS hospcode,
+                  $2 AS hosname,
+                  pt.cid,
+                  pt.hn,
+                  pt.pname,
+                  pt.fname,
+                  pt.lname,
+                  sex.name AS sex, 
+                  date_part('year', age(pt.birthday)) AS AGE,
+                  pt.birthday
+                  from ipt r
+                  left outer join an_stat a on a.an=r.an
+                  left outer join patient pt on pt.hn=a.hn
+                  left outer join ward w on w.ward=a.ward
+                  left outer join iptadm b on b.an=r.an
+                  left outer join pttype pty on pty.pttype=a.pttype
+                  left outer join opdscreen os on os.vn=a.vn
+                  LEFT OUTER JOIN sex sex ON sex.code = pt.sex
+                  where r.an = $3
+            ;
+          `,
+          values: [hospCodeEnv, hospNameEnv, an],
+        };
+
+        sql.query(query)
+          .then(queryResult => {
+            resolve({
+              status: "200",
+              message: "OK",
+              person: {
+                hospcode: `${hospCodeEnv}`,
+                hospname: `${hospNameEnv}`,
+                cid: `${queryResult.rows[0].cid}`,
+                hn: `${queryResult.rows[0].hn}`,
+                prename: `${queryResult.rows[0].pname}`,
+                name: `${queryResult.rows[0].fname}`,
+                lname: `${queryResult.rows[0].lname}`,
+                sex: `${queryResult.rows[0].sex}`,
+                birth: `${moment(queryResult.rows[0].birthday).format("YYYY-MM-DD")}`,
+                age: `${queryResult.rows[0].age}`,
+              },
+            })
+
+          })
+          .catch(error => {
+            console.error('Error executing query', error);
+          })
+      });
+
+      const callGetAdmit: any = await new Promise((resolve, reject) => {
+        const queryDetailAdmit = {
+          text: `
+        SELECT ipt.an, ipt.regdate as admit_date, ipt.regtime as admit_time
+          , ipt.dchdate as discharge_date, ds.name as discharge_status
+          , dt.name as discharge_type, ans.admdate as los
+        FROM ipt 
+        LEFT OUTER JOIN dchstts ds ON ds.dchstts = ipt.dchstts
+        LEFT OUTER JOIN dchtype dt ON dt.dchtype = ipt.dchtype
+        LEFT OUTER JOIN an_stat ans ON ans.an = ipt.an  
+        WHERE ipt.an=$1 
+        order by ipt.regdate  DESC
+        `, values: [an]
+        }
+        sql.query(queryDetailAdmit).then(resIpd => {
+          resolve(resIpd.rows)
+        });
+      });
+
+      const resultCallGetAdmit: any = callGetAdmit.map(getModifyAdmit => {
+        const modifyCallGetAdmit = { ...getModifyAdmit };
+        modifyCallGetAdmit.admit_date = moment(getModifyAdmit.admit_date).format('YYYY-MM-DD');
+        modifyCallGetAdmit.discharge_date = moment(getModifyAdmit.discharge_date).format('YYYY-MM-DD');
+        return modifyCallGetAdmit;
+      });
+
+
+      const doctorNote: any = await new Promise((resolve, reject) => {
+        const querydoctornote: any = {
+          text: `SELECT begin_date_time as  note_date ,operation_detail_text as note_detail
+        from ipt pt 
+        LEFT OUTER JOIN doctor_operation dot on dot.vn = pt.vn
+        LEFT OUTER JOIN er_oper_code eoc ON eoc.er_oper_code=dot.er_oper_code
+        LEFT OUTER JOIN doctor d ON d.code = dot.doctor
+        Where pt.an =$1 
+      `, values: [an]
+        };
+        sql.query(querydoctornote).then(resDoctorNote => {
+
+          resolve(resDoctorNote.rows);
+
+        });
+      });
+
+
+
+
+
+
+      const nurseNote: any = await new Promise((resolve, reject) => {
+        const querynursenote: any = {
+          text: `SELECT begin_date_time as note_date, oper_note as detail_note
+          FROM ipt_nurse_oper ino
+          LEFT OUTER JOIN ipt_oper_code ioc ON ioc.ipt_oper_code = ino.ipt_oper_code
+          LEFT OUTER JOIN doctor d ON d.code = ino.doctor
+          WHERE ino.an =$1 
+      `, values: [an]
+        };
+        sql.query(querynursenote).then(resNurseNote => {
+
+          resolve(resNurseNote.rows);
+
+        });
+      });
+      const callGetIpdDiag: any = await new Promise((resolve, reject) => {
+        const queryDiagIpd = {
+          text: `
+        SELECT  
+        ipt.modify_datetime  as diagtime,
+        c1.code as diagcode,
+        c1.name as diagname,
+        (SELECT name FROM diagtype WHERE diagtype = ipt.diagtype) as diagtype
+        FROM
+          iptdiag ipt
+        RIGHT JOIN
+          icd101 c1 ON c1.code = ipt.icd10
+        WHERE
+          ipt.an = $1`, values: [an]
+        };
+        sql.query(queryDiagIpd).then(resDiagIpd => {
+          resolve(resDiagIpd.rows);
+        })
+
+      });
+
+      const resultIpdDiag: any = callGetIpdDiag.map(visitData => {
+        const modifiedVisitData = { ...visitData };
+        modifiedVisitData.diagtime = moment(visitData.diagtime).format('YYYY-MM-DD');
+        return modifiedVisitData;
+      });
+
+
+
+
+      const resQeuryDrug = await new Promise((resolve, reject) => {
+        const query = {
+          text: `SELECT iptorderno.order_type as home_med,opi.order_no,opi.an,opi.rxdate as date_order ,opi.icode as didstd,concat(dr.name,'  ',dr.strength,'   ',dr.units) as drugname 
+          ,opi.qty as amounts
+          , dr.units as units
+          ,du.code,du.name2 as useage
+          from opitemrece opi
+          left outer join drugitems dr on dr.icode=opi.icode
+          left outer join drugusage du on du.drugusage=dr.drugusage
+          left outer join ipt_order_no iptorderno on iptorderno.an = opi.an     
+           where opi.an = $1 and dr.name <> '' and opi.qty >0 `, values: [an]
+        };
+        sql.query(query).then(queryResult => {
+          resolve(queryResult.rows)
+        });
+      })
+      const responseDrug = await resQeuryDrug
+      const resultIpddrug: any = responseDrug.reduce((accumulator, drugData) => {
+        const existingDrug = accumulator.find(item => item.order_no === drugData.order_no && item.home_med === drugData.home_med);
+        if (!existingDrug) {
+          const modifiedIpdDrug = { ...drugData };
+          modifiedIpdDrug.date_order = moment(drugData.date_order).format('YYYY-MM-DD');
+
+          accumulator.push(modifiedIpdDrug);
+        }
+
+        return accumulator;
+      }, []);
+
+
+      const callGetProcudue: any = await new Promise((resolve, reject) => {
+        const queryProcudue: any = {
+          text: ` 
+        SELECT oprt.opdate as date_start ,oprt.enddate  as end_date
+        , icd9.code as procedcode, icd9.name as procedname
+        FROM  ipt 
+        LEFT JOIN iptoprt oprt  on oprt.an = ipt.an
+        LEFT join icd9cm1 icd9 on icd9.code=oprt.icd9
+        where ipt.an =$1`, values: [an]
+        };
+        sql.query(queryProcudue).then(queryResult => {
+          resolve(queryResult.rows)
+        });
+
+      });
+      const resultIpdOprt: any = callGetProcudue.map(oprtData => {
+        const modifiedIpdOprtData = { ...oprtData };
+        modifiedIpdOprtData.date_start = moment(modifiedIpdOprtData.date_start).format('YYYY-MM-DD');
+        modifiedIpdOprtData.end_date = moment(modifiedIpdOprtData.end_date).format('YYYY-MM-DD');
+        return modifiedIpdOprtData;
+      });
+
+      const labIpd: any = await new Promise((resolve, rejects) => {
+        const queryLabIpd: any = {
+          text: `SELECT
+          h.order_date AS date_order,
+          l.lab_items_code AS labtest,
+          i.lab_items_name AS labname,
+          i.lab_items_normal_value AS labnormal,
+          CASE
+            WHEN (i.lab_items_name NOT LIKE '%hiv%' AND i.lab_items_name NOT LIKE '%interpretation%')
+            THEN l.lab_order_result
+            ELSE 'ปกปิด'
+          END AS labresult
+        FROM
+          lab_head h
+          INNER JOIN lab_order l ON h.lab_order_number = l.lab_order_number
+          INNER JOIN lab_items i ON i.lab_items_code = l.lab_items_code
+        WHERE
+          h.vn = $1;
+        `, values: [an]
+        };
+        sql.query(queryLabIpd).then(queryResult => {
+
+          resolve(queryResult.rows);
+
+        });
+      });
+      const resultIpdLab: any = labIpd.map(LabData => {
+        const modifiedIpdLab = { ...LabData };
+        modifiedIpdLab.date_order = moment(modifiedIpdLab.date_order).format('YYYY-MM-DD');
+        return modifiedIpdLab;
+      });
+      callGetVisitPatient.admit = resultCallGetAdmit;
+      callGetVisitPatient.doctor_note = doctorNote;
+      callGetVisitPatient.nurse_note = nurseNote;
+      callGetVisitPatient.diag_ipd = resultIpdDiag;
+      callGetVisitPatient.drug_ipd = resultIpddrug;
+      callGetVisitPatient.procudure_ipd = resultIpdOprt;
+      callGetVisitPatient.lab_ipd = resultIpdLab;
+
+      return callGetVisitPatient;
+
+    } else {
+      return { status: 400, msg: 'ticket หมดอายุ' };
+    }
+  }
+
 }
 
 export default HieService;

@@ -19,9 +19,13 @@ export class HieRouter implements Routes {
 
 
 
-    // ฝั่ง api
+    // ฝั่ง api opd 
     this.router.get(`/get_visit_list`,this.HieControler.GetVisitList)
     this.router.get(`/get_visit_date`,this.HieControler.GetVisitDate)
+
+    // ฝั่ง api ipd
+    this.router.get(`/get_admit_list`,this.HieControler.GetAdmitList)
+    this.router.get(`/get_admit_an`,this.HieControler.GetAdmitAn) 
   }
 }
 export default  HieRouter

@@ -55,6 +55,20 @@ class HieControlers {
    res.send(restCheckVisitTicket)
  };
 
+
+ public GetAdmitList = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const visitListIpd = await this.hieService.ServiceCheckVisitTicketIpd(req.headers['x-api-key']);
+  
+  res.send(visitListIpd);
+};
+
+public GetAdmitAn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+ 
+ const visitAdmitAn = await this.hieService.ServiceAdmitAn(req.headers['x-api-key'], req.body.date_serv, req.body.an);
+
+  res.send(visitAdmitAn);
+};
+
 }
 
 export default HieControlers;
